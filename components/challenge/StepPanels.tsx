@@ -13,6 +13,7 @@ import {
   Trophy,
   Zap,
 } from "lucide-react";
+import { FillInBlankTemplate } from "@/components/challenge/FillInBlankTemplate";
 import { MissionRole, UserChoice } from "@/types/challenge";
 
 interface SharedStepProps {
@@ -252,6 +253,8 @@ CONSTRAINTS: Be concise. Use bullet points. If unsure of an owner, mark as [PEND
             </div>
           </div>
         </div>
+
+        <FillInBlankTemplate />
       </div>
 
       <button

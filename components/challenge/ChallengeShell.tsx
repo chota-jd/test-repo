@@ -41,8 +41,12 @@ const INITIAL_CHOICES: UserChoice = {
   upgradedPrompt: "",
 };
 
-export function ChallengeShell() {
-  const [currentStep, setCurrentStep] = useState<ActivityStep>("mission");
+interface ChallengeShellProps {
+  initialStep?: ActivityStep;
+}
+
+export function ChallengeShell({ initialStep = "mission" }: ChallengeShellProps) {
+  const [currentStep, setCurrentStep] = useState<ActivityStep>(initialStep);
   const [choices, setChoices] = useState<UserChoice>(INITIAL_CHOICES);
 
   const stepIndex = useMemo(

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
   ArrowRight,
@@ -90,7 +91,40 @@ export function MissionStep({ choices, setChoices, nextStep, roles }: MissionSte
   );
 }
 
-export function BlueprintStep({ nextStep }: Pick<SharedStepProps, "nextStep">) {
+interface BlueprintStepProps extends Pick<SharedStepProps, "nextStep"> {
+  choices: UserChoice;
+  setChoices: (value: UserChoice) => void;
+}
+
+const MODEL_OPTIONS = [
+  {
+    id: "gemma-4-31b-it-free",
+    label: "Gemma 4 31B (Free)",
+    apiModel: "google/gemma-4-31b-it:free",
+    provider: "OpenRouter",
+    note: "Open-source model, good for cost-conscious setups.",
+  },
+  {
+    id: "gemini-2.0-flash",
+    label: "Gemini 2.0 Flash",
+    apiModel: "google/gemini-2.0-flash-001",
+    provider: "Google",
+    note: "Fast and low-latency for iterative workflows.",
+  },
+  {
+    id: "gpt-4o-mini",
+    label: "GPT-4o Mini",
+    apiModel: "openai/gpt-4o-mini",
+    provider: "OpenAI",
+    note: "Balanced quality and speed for general assistants.",
+  },
+];
+
+export function BlueprintStep({ choices, setChoices, nextStep }: BlueprintStepProps) {
+  const selectedModelId = choices.blueprint.model || MODEL_OPTIONS[0].id;
+  const selectedModel =
+    MODEL_OPTIONS.find((model) => model.id === selectedModelId) ?? MODEL_OPTIONS[0];
+
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-3">
@@ -185,6 +219,46 @@ export function BlueprintStep({ nextStep }: Pick<SharedStepProps, "nextStep">) {
         </div>
       </div>
 
+      <div className="bg-brand-card border border-brand-border p-6 rounded-2xl space-y-4 hover:border-brand-accent/50 transition-colors group">
+        <h3 className="font-bold flex items-center gap-2 text-lg">
+          <Bot size={20} className="text-brand-accent group-hover:scale-110 transition-transform" />
+          Model Selection
+        </h3>
+        <p className="text-xs text-gray-500 font-mono">RUNTIME MODEL CONFIGURATION</p>
+        <div className="space-y-3">
+          {MODEL_OPTIONS.map((model) => (
+            <label
+              key={model.id}
+              className={`flex flex-col gap-1 p-4 border rounded-xl cursor-pointer transition-all ${
+                selectedModelId === model.id
+                  ? "border-brand-accent bg-brand-accent/10"
+                  : "border-brand-border hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <input
+                  type="radio"
+                  name="llm-model"
+                  className="accent-brand-accent w-4 h-4"
+                  checked={selectedModelId === model.id}
+                  onChange={() =>
+                    setChoices({
+                      ...choices,
+                      blueprint: { ...choices.blueprint, model: model.id },
+                    })
+                  }
+                />
+                <span className="text-sm font-semibold">{model.label}</span>
+                <span className="text-[10px] uppercase font-bold tracking-wide text-gray-500">
+                  {model.provider}
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 pl-7">{model.note}</p>
+            </label>
+          ))}
+        </div>
+      </div>
+
       <button
         onClick={nextStep}
         className="group flex items-center gap-2 bg-brand-accent hover:bg-brand-accent-hover text-white px-8 py-4 rounded-xl font-bold transition-all w-full justify-center shadow-lg active:scale-95"
@@ -197,6 +271,55 @@ export function BlueprintStep({ nextStep }: Pick<SharedStepProps, "nextStep">) {
 }
 
 export function UpgradeStep({ choices, setChoices, nextStep }: SharedStepProps) {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const selectedModel =
+    MODEL_OPTIONS.find((model) => model.id === choices.blueprint.model) ?? MODEL_OPTIONS[0];
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    setGenerationError(null);
+
+    try {
+      const requestPrompt = choices.upgradedPrompt || choices.prompt;
+      const response = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: selectedModel.apiModel,
+          prompt: requestPrompt,
+          context: {
+            role: choices.role,
+            challenge: choices.challenge,
+          },
+        }),
+      });
+
+      const rawBody = await response.text();
+      const isJson = response.headers.get("content-type")?.includes("application/json");
+      const payload = isJson ? JSON.parse(rawBody) : null;
+
+      if (!isJson) {
+        throw new Error(
+          "API returned non-JSON response. Please confirm this app is running via Next.js dev server and /api/ai route is available.",
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to generate output.");
+      }
+
+      setChoices({
+        ...choices,
+        generatedOutput: payload.output || "",
+      });
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : "Failed to generate output.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-3">
@@ -258,17 +381,92 @@ CONSTRAINTS: Be concise. Use bullet points. If unsure of an owner, mark as [PEND
       </div>
 
       <button
-        onClick={nextStep}
+        type="button"
+        onClick={handleGenerate}
+        disabled={isGenerating}
         className="flex items-center gap-2 bg-brand-accent hover:bg-brand-accent-hover text-white px-8 py-4 rounded-xl font-bold transition-all w-full justify-center shadow-lg active:scale-95"
       >
-        Test This Prompt
+        {isGenerating ? "Generating..." : "Test This Prompt"}
         <ArrowRight size={18} className="ml-2" />
       </button>
+
+      {generationError && (
+        <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">
+          {generationError}
+        </div>
+      )}
+
+      {choices.generatedOutput && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-brand-accent">
+              Model Output Preview
+            </h3>
+            <span className="text-[10px] uppercase tracking-wider text-gray-500">
+              {selectedModel.label}
+            </span>
+          </div>
+          <div className="bg-brand-bg border border-brand-border p-4 rounded-xl text-sm text-gray-200 whitespace-pre-wrap">
+            {choices.generatedOutput}
+          </div>
+          <button
+            type="button"
+            onClick={nextStep}
+            className="flex items-center gap-2 bg-linear-to-r from-brand-accent to-purple-600 text-white px-8 py-4 rounded-xl font-bold transition-all w-full justify-center shadow-lg active:scale-95"
+          >
+            Continue to Activation
+            <ChevronRight size={18} className="ml-2" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-export function ActivateStep({ nextStep }: Pick<SharedStepProps, "nextStep">) {
+interface ActivateStepProps extends Pick<SharedStepProps, "nextStep"> {
+  choices: UserChoice;
+}
+
+export function ActivateStep({ choices, nextStep }: ActivateStepProps) {
+  const modelLabel =
+    MODEL_OPTIONS.find((model) => model.id === choices.blueprint.model)?.label ??
+    "Gemma 4 31B (Free)";
+  const outputPreview = (choices.generatedOutput || "No generated output available.")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 90);
+
+  const logLines = useMemo(
+    () => [
+      `[SYSTEM] Loading context for ${choices.role || "user"} workflow...`,
+      `[LOG] Task initialized: post-meeting-sync`,
+      `[LOG] Challenge parsed: ${choices.challenge ? "SUCCESS" : "SKIPPED"}`,
+      `[LOG] Strategy: ReAct loop start`,
+      `[LOG] Model selected: ${modelLabel}`,
+      `[LOG] Output synthesis in progress...`,
+      `[READY] ${outputPreview}${outputPreview.length >= 90 ? "..." : ""}`,
+    ],
+    [choices.challenge, choices.role, modelLabel, outputPreview],
+  );
+  const [visibleLogCount, setVisibleLogCount] = useState(1);
+
+  useEffect(() => {
+    setVisibleLogCount(1);
+    const timer = setInterval(() => {
+      setVisibleLogCount((prev) => {
+        if (prev >= logLines.length) {
+          clearInterval(timer);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 550);
+
+    return () => clearInterval(timer);
+  }, [logLines]);
+
+  const progress = Math.round((visibleLogCount / logLines.length) * 100);
+
   return (
     <div className="space-y-10 py-4">
       <div className="text-center space-y-4">
@@ -289,28 +487,32 @@ export function ActivateStep({ nextStep }: Pick<SharedStepProps, "nextStep">) {
           </div>
           <div className="flex-1 h-2 bg-brand-border rounded-full overflow-hidden">
             <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: "100%" }}
-              transition={{ duration: 2 }}
+              initial={{ width: "0%" }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.35 }}
               className="h-full bg-green-500 shadow-[0_0_10px_#22c55e]"
             />
           </div>
-          <span className="text-xs font-mono text-green-500">100%</span>
+          <span className="text-xs font-mono text-green-500">{progress}%</span>
         </div>
 
         <div className="bg-brand-bg rounded-2xl p-6 border border-brand-border font-mono text-xs overflow-hidden h-40 relative">
           <div className="absolute inset-0 bg-linear-to-t from-brand-bg via-transparent to-transparent pointer-events-none z-10" />
-          <div className="space-y-1 animate-pulse">
-            <p className="text-brand-accent">[SYSTEM] Fetching context from Module 4...</p>
-            <p className="text-gray-500">[LOG] Task initialized: post-meeting-sync</p>
-            <p className="text-gray-500">[LOG] Tool Call: fetchNotes() -&gt; SUCCESS</p>
-            <p className="text-gray-500">[LOG] Strategy: ReAct loop start</p>
-            <p className="text-gray-500">[LOG] Reasoning: Extracting table from markdown...</p>
-            <p className="text-yellow-500">
-              [WARN] Semantic ambiguity detected. Self-correcting...
-            </p>
-            <p className="text-gray-500">[LOG] Tool Call: draftEmail() -&gt; COMPLETED</p>
-            <p className="text-white font-bold">[READY] Output generated via Gemini-2.0-Flash</p>
+          <div className="space-y-1">
+            {logLines.slice(0, visibleLogCount).map((line, index) => (
+              <p
+                key={line}
+                className={
+                  index === 0
+                    ? "text-brand-accent"
+                    : line.startsWith("[READY]")
+                      ? "text-white font-bold"
+                      : "text-gray-500"
+                }
+              >
+                {line}
+              </p>
+            ))}
           </div>
         </div>
       </div>
@@ -332,6 +534,10 @@ interface ReportStepProps {
 }
 
 export function ReportStep({ choices, restart }: ReportStepProps) {
+  const modelLabel =
+    MODEL_OPTIONS.find((model) => model.id === choices.blueprint.model)?.label ??
+    "Gemma 4 31B (Free)";
+
   return (
     <div className="space-y-12">
       <div className="text-center space-y-2">
@@ -380,7 +586,7 @@ export function ReportStep({ choices, restart }: ReportStepProps) {
           <div className="grid grid-cols-2 gap-8 outline-1 outline-gray-100 p-6 rounded-2xl">
             <div>
               <h5 className="text-[10px] font-bold uppercase mb-2">Technical Engine</h5>
-              <p className="text-sm">Model: Gemini Ultra (Reasoning)</p>
+              <p className="text-sm">Model: {modelLabel}</p>
               <p className="text-sm">Loop: ReAct Architecture</p>
             </div>
             <div>

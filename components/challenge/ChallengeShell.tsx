@@ -36,9 +36,10 @@ const INITIAL_CHOICES: UserChoice = {
   role: null,
   challenge: "",
   isAgentic: null,
-  blueprint: { tool: "", model: "", reasoning: "" },
+  blueprint: { tool: "", model: "gemma-4-31b-it-free", reasoning: "" },
   prompt: "Summarize the meeting notes and send emails.",
   upgradedPrompt: "",
+  generatedOutput: "",
 };
 
 interface ChallengeShellProps {
@@ -92,11 +93,13 @@ export function ChallengeShell({ initialStep = "mission" }: ChallengeShellProps)
             {currentStep === "mission" && (
               <MissionStep choices={choices} setChoices={setChoices} nextStep={nextStep} roles={ROLES} />
             )}
-            {currentStep === "blueprint" && <BlueprintStep nextStep={nextStep} />}
+            {currentStep === "blueprint" && (
+              <BlueprintStep choices={choices} setChoices={setChoices} nextStep={nextStep} />
+            )}
             {currentStep === "upgrade" && (
               <UpgradeStep choices={choices} setChoices={setChoices} nextStep={nextStep} />
             )}
-            {currentStep === "activate" && <ActivateStep nextStep={nextStep} />}
+            {currentStep === "activate" && <ActivateStep choices={choices} nextStep={nextStep} />}
             {currentStep === "report" && <ReportStep choices={choices} restart={restartFlow} />}
           </motion.div>
         </AnimatePresence>

@@ -30,4 +30,5 @@ export interface UserChoice {
   };
   prompt: string;
   upgradedPrompt: string;
+  generatedOutput: string;
 }

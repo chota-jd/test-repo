@@ -6,7 +6,10 @@ import {
   ArrowRight,
   Bot,
   CheckCircle2,
+  Check,
   ChevronRight,
+  Clipboard,
+  Copy,
   GraduationCap,
   Puzzle,
   Search,
@@ -27,7 +30,37 @@ interface MissionStepProps extends SharedStepProps {
   roles: MissionRole[];
 }
 
+const CHALLENGE_EXAMPLES = [
+  {
+    id: "meetings",
+    label: "After meetings",
+    text: "I spend too much time summarizing meeting notes and sending follow-up emails to my team after every project meeting.",
+  },
+  {
+    id: "planning",
+    label: "Planning & status",
+    text: "I juggle multiple projects and stakeholders, and I struggle to turn scattered updates into one clear weekly status that people actually read.",
+  },
+  {
+    id: "learning",
+    label: "Studying efficiently",
+    text: "I have dense course readings and lecture slides every week, and I want help turning them into concise study guides without skipping important concepts.",
+  },
+] as const;
+
 export function MissionStep({ choices, setChoices, nextStep, roles }: MissionStepProps) {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyExample = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      /* clipboard may be unavailable */
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-3">
@@ -74,6 +107,51 @@ export function MissionStep({ choices, setChoices, nextStep, roles }: MissionSte
           placeholder="e.g. I spend too much time summarizing meeting notes and sending follow-up emails to my team after every project meeting."
           className="w-full h-32 bg-brand-card border border-brand-border rounded-xl p-4 text-white placeholder:text-gray-600 focus:outline-none focus:border-brand-accent resize-none transition-colors"
         />
+        <div className="rounded-xl border border-brand-border bg-brand-card/60 p-4 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Example ideas — use one or copy to edit
+          </p>
+          <ul className="space-y-3">
+            {CHALLENGE_EXAMPLES.map((ex) => (
+              <li
+                key={ex.id}
+                className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4 rounded-lg border border-brand-border/80 bg-brand-bg/50 p-3"
+              >
+                <div className="min-w-0 flex-1 space-y-1">
+                  <span className="text-xs font-medium text-brand-accent">{ex.label}</span>
+                  <p className="text-sm text-gray-300 leading-relaxed">{ex.text}</p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setChoices({ ...choices, challenge: ex.text })}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-brand-accent/50 bg-brand-accent/15 px-3 py-2 text-xs font-semibold text-brand-accent hover:bg-brand-accent/25 transition-colors"
+                  >
+                    <Clipboard size={14} aria-hidden />
+                    Use this
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copyExample(ex.text, ex.id)}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-brand-border px-3 py-2 text-xs font-semibold text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
+                  >
+                    {copiedId === ex.id ? (
+                      <>
+                        <Check size={14} className="text-green-400" aria-hidden />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} aria-hidden />
+                        Copy
+                      </>
+                    )}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
         <p className="text-xs text-gray-500 italic">
           Be specific — the more real your challenge, the more useful your agent will be.
         </p>
